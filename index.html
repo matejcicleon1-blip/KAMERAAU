@@ -3,50 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>KLEO AI Vision Pro - FIXED</title>
+    <title>KLEO AI - 3 Sidra Autodetect</title>
     <style>
         body { font-family: sans-serif; background: #000; color: #fff; margin: 0; overflow: hidden; }
         #view { width: 100vw; height: 100vh; object-fit: cover; }
         .ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-        .top-info { position: absolute; top: 0; width: 100%; background: rgba(0,0,0,0.7); padding: 10px; text-align: center; pointer-events: auto; }
-        #status { color: #f1c40f; font-weight: bold; font-size: 16px; }
-        .prediction-overlay { position: absolute; bottom: 160px; width: 100%; text-align: center; display: none; }
+        .top-info { position: absolute; top: 0; width: 100%; background: rgba(0,0,0,0.8); padding: 10px; text-align: center; pointer-events: auto; }
+        #status { color: #f1c40f; font-weight: bold; font-size: 20px; }
+        
+        /* Prikaz rezultata (Sidra) */
+        .prediction-overlay { position: absolute; bottom: 180px; width: 100%; text-align: center; display: none; }
         .anchor-row { display: flex; justify-content: center; gap: 10px; margin-top: 10px; }
-        .a-box { background: #2980b9; padding: 15px; border-radius: 10px; font-size: 24px; font-weight: bold; min-width: 50px; border: 2px solid #fff; }
-        .controls { position: absolute; bottom: 0; width: 100%; padding: 20px; background: rgba(0,0,0,0.8); pointer-events: auto; text-align: center; }
-        #zoomRange { width: 80%; }
-        .btn { padding: 15px 30px; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; }
+        .a-box { background: #2980b9; padding: 15px; border-radius: 12px; font-size: 28px; font-weight: bold; min-width: 60px; border: 2px solid #fff; box-shadow: 0 0 15px rgba(0,255,0,0.3); }
+        #a2 { background: #27ae60; } /* Glavno sidro */
+        
+        .controls { position: absolute; bottom: 0; width: 100%; padding: 20px; background: rgba(0,0,0,0.9); pointer-events: auto; text-align: center; }
+        #zoomRange { width: 85%; height: 35px; }
+        .btn { padding: 18px 35px; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px; width: 80%; }
         .btn-start { background: #27ae60; color: #fff; }
-        .btn-reset { background: #c0392b; color: #fff; margin-left: 10px; }
-        #aimer { position: absolute; width: 40px; height: 100px; border: 2px solid #fff; display: none; transform: translate(-50%, -50%); pointer-events: none; }
+        .btn-reset { background: #c0392b; color: #fff; margin-top: 10px; }
     </style>
 </head>
 <body>
 
 <canvas id="view"></canvas>
-<div id="aimer"></div>
 
 <div class="ui">
     <div class="top-info">
-        <div id="status">DODIRNI DIJAMANT NA EKRANU</div>
-        <div style="font-size: 11px; color: #aaa;">
-            R: <span id="valR">--</span>s | B: <span id="valB">--</span>s
+        <div id="status">NACILJAJ I DODIRNI DIJAMANT</div>
+        <div style="font-size: 12px; color: #aaa; margin-top: 5px;">
+            R: <span id="valR">--</span> | B: <span id="valB">--</span> | 
+            OFF: <input type="number" id="offset" value="12" style="width:35px; background:#000; color:#fff; border:1px solid #555;">
         </div>
     </div>
 
     <div id="result" class="prediction-overlay">
-        <div id="sector-list" style="color:#2ecc71; font-weight:bold; margin-bottom:5px;"></div>
+        <div id="sector-list" style="color:#2ecc71; font-weight:bold; margin-bottom:10px; font-size:14px; letter-spacing: 2px;"></div>
         <div class="anchor-row">
-            <div class="a-box" id="a1"></div>
-            <div class="a-box" id="a2" style="background:#27ae60;"></div>
-            <div class="a-box" id="a3"></div>
+            <div class="a-box" id="a1">--</div>
+            <div class="a-box" id="a2">--</div>
+            <div class="a-box" id="a3">--</div>
         </div>
     </div>
 
     <div class="controls">
-        <input type="range" id="zoomRange" min="1" max="10" step="0.1" value="1"><br>
-        <button id="startBtn" class="btn btn-start">START</button>
-        <button id="resetBtn" class="btn btn-reset">RESET</button>
+        <input type="range" id="zoomRange" min="1" max="5" step="0.1" value="1"><br>
+        <button id="startBtn" class="btn btn-start">START KAMERA</button>
+        <button id="resetBtn" class="btn btn-reset">NOVA RUKA (RESET)</button>
     </div>
 </div>
 
@@ -57,17 +60,14 @@
     const ALPHA = 0.017, BETA = 0.118, OMEGA_FALL = 10.37, K_FACTOR = 0.006;
 
     let cameraRunning = false, tTimes = [], bTimes = [], anchorPos = null;
-    let prevR = null, prevB = null, lastRT = 0, lastBT = 0;
+    let prevB = null, lastRT = 0, lastBT = 0;
     
     const canvas = document.getElementById("view"), ctx = canvas.getContext("2d", {willReadFrequently:true});
-    const video = document.getElementById("video"), aimer = document.getElementById("aimer");
+    const video = document.getElementById("video");
 
     window.addEventListener('pointerdown', (e) => {
         if (!cameraRunning || e.target.closest('.controls')) return;
         anchorPos = { x: e.clientX, y: e.clientY };
-        aimer.style.display = "block";
-        aimer.style.left = e.clientX + "px";
-        aimer.style.top = e.clientY + "px";
         resetData();
     });
 
@@ -79,63 +79,92 @@
         requestAnimationFrame(drawLoop);
     }
 
+    function isGreen(r, g, b) {
+        return (g > r * 1.3 && g > b * 1.3 && g > 45);
+    }
+
     function drawLoop() {
         if (!cameraRunning) return;
         canvas.width = window.innerWidth; canvas.height = window.innerHeight;
-        
-        const zoom = document.getElementById('zoomRange').value;
+        const zoom = parseFloat(document.getElementById('zoomRange').value);
         const w = canvas.width / zoom, h = canvas.height / zoom;
         const xOff = (canvas.width - w) / 2, yOff = (canvas.height - h) / 2;
-        
         ctx.drawImage(video, xOff, yOff, w, h, 0, 0, canvas.width, canvas.height);
 
         if (anchorPos) {
-            // Crtanje indikatora senzora za provjeru
-            ctx.fillStyle = "red"; ctx.fillRect(anchorPos.x-2, anchorPos.y+30, 4, 4); // Rotor senzor
-            ctx.fillStyle = "lime"; ctx.fillRect(anchorPos.x-2, anchorPos.y-30, 4, 4); // Ball senzor
-            
-            const rData = getAvg(ctx.getImageData(anchorPos.x-5, anchorPos.y+25, 10, 10));
-            const bData = getAvg(ctx.getImageData(anchorPos.x-5, anchorPos.y-35, 10, 10));
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = "red"; ctx.strokeRect(anchorPos.x - 15, anchorPos.y + 25, 30, 30); 
+            ctx.strokeStyle = "lime"; ctx.strokeRect(anchorPos.x - 15, anchorPos.y - 55, 30, 30); 
 
-            // Detekcija s povećanom osjetljivošću (15 umjesto 25)
-            if (prevR !== null && tTimes.length < 2 && Math.abs(rData - prevR) > 15) {
-                const now = performance.now()/1000;
-                if (Date.now() - lastRT > 1000) { tTimes.push(now); lastRT = Date.now(); }
+            const rData = ctx.getImageData(anchorPos.x - 10, anchorPos.y + 30, 20, 20).data;
+            const bImg = ctx.getImageData(anchorPos.x - 10, anchorPos.y - 50, 20, 20);
+            const now = performance.now() / 1000;
+
+            // 1. Detekcija Nule
+            if (tTimes.length < 2) {
+                let greenPixels = 0;
+                for (let i = 0; i < rData.length; i += 4) {
+                    if (isGreen(rData[i], rData[i+1], rData[i+2])) greenPixels++;
+                }
+                if (greenPixels > 60 && (Date.now() - lastRT > 1800)) {
+                    tTimes.push(now); lastRT = Date.now();
+                    document.getElementById("status").innerText = `NULA: ${tTimes.length}/2`;
+                }
             }
-            if (prevB !== null && tTimes.length === 2 && bTimes.length < 2 && Math.abs(bData - prevB) > 15) {
-                const now = performance.now()/1000;
-                if (Date.now() - lastBT > 500) { bTimes.push(now); lastBT = Date.now(); }
+
+            // 2. Detekcija Loptice
+            const bAvg = getAvg(bImg);
+            if (prevB !== null && tTimes.length === 2 && bTimes.length < 2) {
+                if ((bAvg - prevB) > 35 && (Date.now() - lastBT > 600)) {
+                    bTimes.push(now); lastBT = Date.now();
+                    document.getElementById("status").innerText = `LOPTICA: ${bTimes.length}/2`;
+                }
             }
-            prevR = rData; prevB = bData;
-            
-            if (tTimes.length === 2) document.getElementById("valR").innerText = (tTimes[1]-tTimes[0]).toFixed(2);
+            prevB = bAvg;
+
+            if (tTimes.length === 2) document.getElementById("valR").innerText = (tTimes[1]-tTimes[0]).toFixed(2) + "s";
             if (bTimes.length === 2) {
-                document.getElementById("valB").innerText = (bTimes[1]-bTimes[0]).toFixed(2);
-                calculateResult();
+                document.getElementById("valB").innerText = (bTimes[1]-bTimes[0]).toFixed(2) + "s";
+                if (document.getElementById("result").style.display !== "block") calculateResult();
             }
         }
         requestAnimationFrame(drawLoop);
     }
 
     function calculateResult() {
-        if (document.getElementById("result").style.display === "block") return;
-        const tR = tTimes[1] - tTimes[0], tB = bTimes[1] - bTimes[0];
-        const off = parseFloat(document.getElementById("offset").value) || 12;
+        const tR = tTimes[1] - tTimes[0];
+        const tB = bTimes[1] - bTimes[0];
+        const off = parseFloat(document.getElementById("offset").value);
 
         let omega = (2 * Math.PI) / tB;
+        if (omega <= OMEGA_FALL) {
+            document.getElementById("status").innerText = "LOPTICA PRESPORA";
+            return;
+        }
+
+        // Formule iz PDF-a
         let t_fall = (omega - OMEGA_FALL) / ((ALPHA * Math.pow(omega, 2) + BETA) / omega);
         let nu0 = (1 / tR) - (K_FACTOR * tR / 2);
-        let centar = Math.round((nu0 * t_fall - (K_FACTOR / 2) * Math.pow(t_fall, 2)) * 37 + off);
-
-        let s = [];
-        for(let i = -7; i <= 7; i++) s.push(BROJEVI[((centar + i) % 37 + 37) % 37]);
+        let predjeni_put = (nu0 * t_fall - (K_FACTOR / 2) * Math.pow(t_fall, 2)) * 37;
         
-        document.getElementById("a1").innerText = s[2];
-        document.getElementById("a2").innerText = s[7];
-        document.getElementById("a3").innerText = s[12];
-        document.getElementById("sector-list").innerText = s.join(" ");
+        // Finalni broj (Sidro)
+        let centar = Math.round((predjeni_put + off) % 37 + 37) % 37;
+
+        // Generiranje niza (Sidro 1, 2, 3)
+        let s = [];
+        for(let i = -7; i <= 7; i++) {
+            let idx = (BROJEVI.indexOf(centar) + i + 37) % 37;
+            s.push(BROJEVI[idx]);
+        }
+
+        // Prikaz na ekranu
+        document.getElementById("a1").innerText = s[2];  // Sidro lijevo
+        document.getElementById("a2").innerText = s[7];  // Glavno sidro (centar)
+        document.getElementById("a3").innerText = s[12]; // Sidro desno
+        document.getElementById("sector-list").innerText = s.join(" - ");
+        
         document.getElementById("result").style.display = "block";
-        document.getElementById("status").innerText = "POGOĐENO!";
+        document.getElementById("status").innerText = "ULOŽI NA SIDRA!";
     }
 
     function getAvg(img) {
@@ -145,7 +174,7 @@
     }
 
     function resetData() {
-        tTimes = []; bTimes = []; prevR = null; prevB = null;
+        tTimes = []; bTimes = []; prevB = null;
         document.getElementById("result").style.display = "none";
         document.getElementById("status").innerText = "PRATIM...";
     }
